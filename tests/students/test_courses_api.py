@@ -136,3 +136,72 @@ def test_delete_course(api_client, course_factory):
     # Assert
     assert response.status_code == status.HTTP_204_NO_CONTENT
     assert Course.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_course_student_limit_success(api_client, course_factory,
+                                      student_factory, settings):
+    # Arrange
+    settings.MAX_STUDENTS_PER_COURSE = 3
+    course = course_factory()
+    students = student_factory(_quantity=2)
+    course_data = {
+        'name': course.name,
+        'students': [student.id for student in students]
+    }
+
+    # Act
+    response = api_client.put(f'/api/v1/courses/{course.id}/',
+                              data=course_data, format='json')
+
+    # Assert
+    assert response.status_code == status.HTTP_200_OK
+
+
+@pytest.mark.django_db
+def test_course_student_limit_exceeded(api_client, course_factory,
+                                       student_factory, settings):
+    # Arrange
+    settings.MAX_STUDENTS_PER_COURSE = 2
+    course = course_factory()
+    students = student_factory(_quantity=3)
+
+    course_data = {
+        'name': course.name,
+        'students': [student.id for student in students]
+    }
+
+    # Act
+    response = api_client.put(f'/api/v1/courses/{course.id}/',
+                              data=course_data, format='json')
+
+    # Assert
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('student_count,expected_status', [
+    (1, status.HTTP_200_OK),
+    (2, status.HTTP_200_OK),
+    (3, status.HTTP_400_BAD_REQUEST),
+    (4, status.HTTP_400_BAD_REQUEST),
+])
+def test_course_student_limit_parametrized(api_client, course_factory,
+                                           student_factory, settings,
+                                           student_count, expected_status):
+    # Arrange
+    settings.MAX_STUDENTS_PER_COURSE = 2
+    course = course_factory()
+    students = student_factory(_quantity=student_count)
+
+    course_data = {
+        'name': course.name,
+        'students': [student.id for student in students]
+    }
+
+    # Act
+    response = api_client.put(f'/api/v1/courses/{course.id}/',
+                              data=course_data, format='json')
+
+    # Assert
+    assert response.status_code == expected_status
